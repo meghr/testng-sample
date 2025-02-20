@@ -1,0 +1,482 @@
+Step 1: Project Structure
+Ensure your project structure looks like this:
+
+src/main/java/com/example/jiraqakpi/
+    - DashboardApplication.java
+    - DashboardController.java
+    - JiraDataFetcher.java
+    - ExcelExporter.java
+    - Issue.java
+
+src/main/resources/
+    - config.properties
+    - templates/dashboard.html
+
+
+Step 2: Complete Code
+1. DashboardApplication.java
+
+package com.example.jiraqakpi;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class DashboardApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(DashboardApplication.class, args);
+    }
+}
+
+2. DashboardController.java
+
+package com.example.jiraqakpi;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Controller
+public class DashboardController {
+
+    @GetMapping("/")
+    public String getDashboard(Model model) {
+        return "dashboard";
+    }
+
+    @GetMapping("/filter")
+    public String filterData(@RequestParam String startDate, @RequestParam String endDate, Model model) {
+        // Fetch and filter issues based on date range (replace with actual Jira API call)
+        List<Map<String, Object>> issues = fetchFilteredIssues(startDate, endDate);
+
+        // Aggregate data for charts
+        Map<String, Integer> businessAreaDistribution = new HashMap<>();
+        Map<String, Integer> taskCategoryDistribution = new HashMap<>();
+        Map<String, Integer> qaTimeSpent = new HashMap<>();
+
+        for (Map<String, Object> issue : issues) {
+            String businessArea = (String) issue.get("businessArea");
+            String taskCategory = (String) issue.get("taskCategory");
+            String qaAssignee = (String) issue.get("qaAssignee");
+            int storyPoints = (int) issue.get("storyPoints");
+
+            businessAreaDistribution.put(businessArea, businessAreaDistribution.getOrDefault(businessArea, 0) + storyPoints);
+            taskCategoryDistribution.put(taskCategory, taskCategoryDistribution.getOrDefault(taskCategory, 0) + storyPoints);
+            qaTimeSpent.put(qaAssignee, qaTimeSpent.getOrDefault(qaAssignee, 0) + storyPoints);
+        }
+
+        // Pass data to the view
+        model.addAttribute("businessAreaLabels", String.join(",", businessAreaDistribution.keySet()));
+        model.addAttribute("businessAreaData", String.join(",", businessAreaDistribution.values().stream().map(String::valueOf).toArray(String[]::new)));
+
+        model.addAttribute("taskCategoryLabels", String.join(",", taskCategoryDistribution.keySet()));
+        model.addAttribute("taskCategoryData", String.join(",", taskCategoryDistribution.values().stream().map(String::valueOf).toArray(String[]::new)));
+
+        model.addAttribute("qaNames", String.join(",", qaTimeSpent.keySet()));
+        model.addAttribute("qaData", String.join(",", qaTimeSpent.values().stream().map(String::valueOf).toArray(String[]::new)));
+
+        return "dashboard";
+    }
+
+    @GetMapping("/export")
+    public String exportToExcel(@RequestParam(required = false) String startDate, @RequestParam(required = false) String endDate) {
+        try {
+            // Fetch filtered issues (replace with actual Jira API call)
+            List<Map<String, Object>> issues = fetchFilteredIssues(startDate, endDate);
+
+            // Export to Excel
+            File file = new File("filtered_data.xlsx");
+            ExcelExporter.exportToExcel(issues, file.getAbsolutePath());
+
+            System.out.println("Data exported successfully to " + file.getAbsolutePath());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return "redirect:/";
+    }
+
+    private List<Map<String, Object>> fetchFilteredIssues(String startDate, String endDate) {
+        // Replace this with actual Jira API call to fetch filtered issues
+        return List.of(
+            Map.of("title", "Task 1", "qaAssignee", "John", "storyPoints", 5, "businessArea", "Area 1", "taskCategory", "Bug"),
+            Map.of("title", "Task 2", "qaAssignee", "Jane", "storyPoints", 3, "businessArea", "Area 2", "taskCategory", "Feature"),
+            Map.of("title", "Task 3", "qaAssignee", "John", "storyPoints", 8, "businessArea", "Area 1", "taskCategory", "Bug")
+        );
+    }
+}
+
+
+
+3. JiraDataFetcher.java
+
+
+package com.example.jiraqakpi;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+
+public class JiraDataFetcher {
+    private static final String CONFIG_FILE = "config.properties";
+
+    public static List<Map<String, Object>> fetchIssues() throws Exception {
+        // Load configuration
+        Properties config = new Properties();
+        try (InputStream input = new FileInputStream(CONFIG_FILE)) {
+            config.load(input);
+        }
+
+        String jiraUrl = config.getProperty("jira.url");
+        String token = config.getProperty("jira.token");
+        String username = config.getProperty("jira.username");
+        String epics = config.getProperty("epics");
+        String label = config.getProperty("label");
+        String dateRange = config.getProperty("date.range");
+
+        // Build JQL query
+        String jql = String.format(
+                "(issue in epics(%s) OR labels = %s) AND status = Closed AND updated >= \"%s-01\" AND updated <= \"%s-31\"",
+                epics, label, dateRange, dateRange
+        );
+
+        // Fetch data from Jira
+        String apiUrl = jiraUrl + "/rest/api/3/search?jql=" + jql;
+        HttpURLConnection connection = (HttpURLConnection) new URL(apiUrl).openConnection();
+        connection.setRequestMethod("GET");
+        connection.setRequestProperty("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString((username + ":" + token).getBytes()));
+        connection.setRequestProperty("Accept", "application/json");
+
+        List<Map<String, Object>> issues = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode rootNode = mapper.readTree(reader);
+
+            for (JsonNode issueNode : rootNode.path("issues")) {
+                String title = issueNode.path("fields").path("summary").asText();
+                String qaAssignee = issueNode.path("fields").path("assignee").path("displayName").asText();
+                int storyPoints = issueNode.path("fields").path("customfield_10002").asInt(); // Replace with your custom field ID
+                String businessArea = issueNode.path("fields").path("customfield_10003").asText(); // Replace with your custom field ID
+                String taskCategory = issueNode.path("fields").path("customfield_10004").asText(); // Replace with your custom field ID
+
+                issues.add(Map.of(
+                        "title", title,
+                        "qaAssignee", qaAssignee,
+                        "storyPoints", storyPoints,
+                        "businessArea", businessArea,
+                        "taskCategory", taskCategory
+                ));
+            }
+        }
+        return issues;
+    }
+}
+
+
+
+ExcelExporter.java
+
+
+package com.example.jiraqakpi;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+public class ExcelExporter {
+    public static void exportToExcel(List<Map<String, Object>> issues, String filePath) throws IOException {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Jira Data");
+
+        // Create header row
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {"Title", "QA Assignee", "Story Points", "Business Area", "Task Category"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+        }
+
+        // Populate data rows
+        int rowNum = 1;
+        for (Map<String, Object> issue : issues) {
+            Row row = sheet.createRow(rowNum++);
+            row.createCell(0).setCellValue((String) issue.get("title"));
+            row.createCell(1).setCellValue((String) issue.get("qaAssignee"));
+            row.createCell(2).setCellValue((int) issue.get("storyPoints"));
+            row.createCell(3).setCellValue((String) issue.get("businessArea"));
+            row.createCell(4).setCellValue((String) issue.get("taskCategory"));
+        }
+
+        // Write to file
+        try (FileOutputStream outputStream = new FileOutputStream(filePath)) {
+            workbook.write(outputStream);
+        }
+        workbook.close();
+    }
+}
+
+
+Issue.java
+
+package com.example.jiraqakpi;
+
+public class Issue {
+    private String title;
+    private String qaAssignee;
+    private int storyPoints;
+    private String businessArea;
+    private String taskCategory;
+
+    public Issue(String title, String qaAssignee, int storyPoints, String businessArea, String taskCategory) {
+        this.title = title;
+        this.qaAssignee = qaAssignee;
+        this.storyPoints = storyPoints;
+        this.businessArea = businessArea;
+        this.taskCategory = taskCategory;
+    }
+
+    // Getters
+    public String getTitle() { return title; }
+    public String getQaAssignee() { return qaAssignee; }
+    public int getStoryPoints() { return storyPoints; }
+    public String getBusinessArea() { return businessArea; }
+    public String getTaskCategory() { return taskCategory; }
+}
+
+
+dashboard.html
+
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>QA KPI Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .chart-container { margin-bottom: 40px; }
+        .form-container { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>QA KPI Dashboard</h1>
+
+    <!-- Date Range Form -->
+    <div class="form-container">
+        <form id="dateRangeForm" method="GET" action="/filter">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" name="startDate" required>
+            <label for="endDate">End Date:</label>
+            <input type="date" id="endDate" name="endDate" required>
+            <button type="submit">Filter</button>
+        </form>
+        <a href="/export"><button>Export to Excel</button></a>
+    </div>
+
+    <!-- Business Area Distribution -->
+    <div class="chart-container">
+        <h2>Business Area Distribution</h2>
+        <canvas id="businessAreaChart"></canvas>
+    </div>
+
+    <!-- Task Category Distribution -->
+    <div class="chart-container">
+        <h2>Task Category Distribution</h2>
+        <canvas id="taskCategoryChart"></canvas>
+    </div>
+
+    <!-- QA Time Spent -->
+    <div class="chart-container">
+        <h2>QA Time Spent Across Epics</h2>
+        <canvas id="qaTimeSpentChart"></canvas>
+    </div>
+
+    <script>
+        // Business Area Chart
+        const businessAreaCtx = document.getElementById('businessAreaChart').getContext('2d');
+        const businessAreaChart = new Chart(businessAreaCtx, {
+            type: 'pie',
+            data: {
+                labels: [[${businessAreaLabels}]].split(","),
+                datasets: [{
+                    data: [[${businessAreaData}]].split(",").map(Number),
+                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56']
+                }]
+            },
+            options: { responsive: true }
+        });
+
+        // Task Category Chart
+        const taskCategoryCtx = document.getElementById('taskCategoryChart').getContext('2d');
+        const taskCategoryChart = new Chart(taskCategoryCtx, {
+            type: 'bar',
+            data: {
+                labels: [[${taskCategoryLabels}]].split(","),
+                datasets: [{
+                    label: 'Story Points',
+                    data: [[${taskCategoryData}]].split(",").map(Number),
+                    backgroundColor: '#36A2EB'
+                }]
+            },
+            options: { responsive: true }
+        });
+
+        // QA Time Spent Chart
+        const qaTimeSpentCtx = document.getElementById('qaTimeSpentChart').getContext('2d');
+        const qaTimeSpentChart = new Chart(qaTimeSpentCtx, {
+            type: 'bar',
+            data: {
+
+
+
+Step 3: Configuration File (config.properties)
+
+
+jira.url=https://your-jira-instance.atlassian.net
+jira.token=your-jira-token
+jira.username=your-email@example.com
+epics=Epic-1,Epic-2,Epic-3,Epic-4,Epic-5
+label=QA_EFFORTS
+export.path=/path/to/export/directory
+date.range=2023-10
+
+
+Step 4: Run the Application
+Replace placeholders in config.properties with your actual Jira credentials.
+Start the Spring Boot application.
+Open your browser and navigate to http://localhost:8080.
+Use the date range form to filter data and visualize it on the dashboard.
+Click the "Export to Excel" button to download the filtered data.
+Let me know if you encounter any issues or need further clarification! 🚀
+
+
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Project Details -->
+    <groupId>com.example</groupId>
+    <artifactId>jira-qakpi</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <java.version>17</java.version> <!-- Specify your Java version -->
+        <spring-boot.version>3.1.0</spring-boot.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Starter Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+
+        <!-- Thymeleaf for HTML Templates -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+
+        <!-- Jackson for JSON Parsing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+
+        <!-- Apache POI for Excel Export -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.3</version>
+        </dependency>
+
+        <!-- Apache HttpClient for Jira API -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.13</version>
+        </dependency>
+
+        <!-- Spring Boot Starter Test (Optional) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+
+
+Explanation of Dependencies
+Spring Boot Starter Web :
+Provides the core functionality for building a web application with Spring Boot.
+Spring Boot Starter Thymeleaf :
+Enables server-side rendering of HTML templates using Thymeleaf.
+Jackson Databind :
+Used to parse JSON responses from the Jira REST API.
+Apache POI :
+Allows you to create and manipulate Excel files.
+Apache HttpClient :
+Used to make HTTP requests to the Jira REST API.
+Spring Boot Starter Test (Optional):
+Includes testing utilities for unit and integration tests.
+Spring Boot Maven Plugin :
+Packages the application into an executable JAR file.
+
+
+Steps to Use
+Copy the above pom.xml content into your project's pom.xml file.
+Run the following command in your terminal to download all dependencies:
+bash
+Copy
+1
+mvn clean install
+Ensure your Java version matches the one specified in the <java.version> property (e.g., Java 17).
+Once dependencies are downloaded, you can run the application using:
+bash
+Copy
+1
+mvn spring-boot:run
+
+

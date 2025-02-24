@@ -1,0 +1,96 @@
+Test Case Template 
+
+# Test Case Generation Prompt Template
+
+Please help me create test cases based on the following requirement and test data. Follow the structure and guidelines below to generate comprehensive test cases.
+
+## Work Flow 
+
+[Explain Work flow of the system in short ]
+
+## Input Requirements
+[Paste your requirement/user story/feature description here]
+
+## Test Data
+[Provide any relevant test data, including:
+- Input values
+- Expected outputs
+- Edge cases
+- Boundary conditions
+- Invalid/negative scenarios]
+
+## Technical Context (if applicable)
+[Provide any relevant technical details:
+- System components involved
+- Dependencies
+- Environment details
+- API specifications
+- Database structures]
+
+## System Under Test 
+
+[Provide system name under test and make sure this have been mentioned in Requirements]
+
+## Template Structure
+For each test scenario, please generate test cases in the following format:
+
+### Test Case [Number]
+**Pre-Conditions:**
+- List all necessary conditions that must be met before executing the test
+- Include system state, data setup, user permissions, etc.
+- Specify any dependencies or prerequisites
+
+**Test Description:**
+[One-line description clearly stating the objective of the test case]
+
+**Test Steps:**
+1. [Detailed step-by-step instructions]
+2. [Each step should be clear and actionable]
+3. [Include specific input data where applicable]
+4. [Mention any waiting periods or system responses to observe]
+
+**Expected Result:**
+- [Clear description of what should happen when test steps are executed]
+- [Include specific success criteria]
+- [Mention any system messages or responses expected]
+
+## Additional Requirements
+Please ensure the test cases:
+1. Cover both positive and negative scenarios
+2. Include boundary value testing where applicable
+3. Consider different user roles if relevant
+4. Address performance criteria if specified
+5. Include data validation checks
+6. Consider error handling scenarios
+
+
+1. Introduction to AI in Testing
+AI is transforming software testing by automating test creation, execution, and analysis.
+Helps reduce manual effort, improve test coverage, and identify defects faster.
+AI-powered tools assist in test preparation, unit testing, regression testing, and defect prediction.
+
+2. AI in Test Preparation
+A. Test Case Generation
+AI can analyze requirements, user stories, and system workflows to generate exhaustive test cases.
+Ensures test cases cover positive, negative, and edge cases.
+Example: Using AI models like Git DUO  for structured test case generation.
+
+Automated Test Data Generation
+AI can generate realistic test data, including:
+Valid and invalid inputs
+Boundary values
+Randomized test data for stress testing
+
+Benefits of AI in Test Preparation & Unit Testing
+✅ Faster Test Case Creation – Saves time in writing and maintaining test cases.
+✅ Improved Test Coverage – AI ensures all edge cases and risk areas are covered.
+✅ Smarter Test Execution – AI-driven test prioritization reduces test execution time.
+✅ Reduced Test Maintenance – Self-healing scripts adapt to changes automatically.
+✅ Better Unit Test Efficiency – AI suggests and improves unit test effectiveness.
+
+Best Practices:
+✔️ Use AI for test case creation, but manually validate key scenarios.
+✔️ Combine AI-driven and manual exploratory testing for better quality.
+✔️ Choose AI tools that integrate well with your automation framework.
+Unit Test :
+
